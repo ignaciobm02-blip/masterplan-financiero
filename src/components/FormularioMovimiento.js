@@ -3,11 +3,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 
-export default function FormularioMovimiento() {
+export default function FormularioMovimiento({ onGuardadoExitoso }) {
   const [categorias, setCategorias] = useState([]);
   const [subcategorias, setSubcategorias] = useState([]);
   const [mediosPago, setMediosPago] = useState([]);
   const [bancos, setBancos] = useState([]);
+  
+  // NUEVO: Estado para las Tarjetas de Crédito
+  const [tarjetas, setTarjetas] = useState([]);
 
   const [monto, setMonto] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
@@ -18,6 +21,10 @@ export default function FormularioMovimiento() {
   const [subcategoriaSel, setSubcategoriaSel] = useState('');
   const [medioPagoSel, setMedioPagoSel] = useState('');
   const [bancoSel, setBancoSel] = useState('');
+  
+  // NUEVO: Estados para Tarjeta seleccionada y Cuotas
+  const [tarjetaSel, setTarjetaSel] = useState('');
+  const [cuotas, setCuotas] = useState(1);
 
   const [loading, setLoading] = useState(true);
 
@@ -25,17 +32,20 @@ export default function FormularioMovimiento() {
     async function cargarDatosIniciales() {
       try {
         setLoading(true);
-        const [resCat, resSub, resMedios, resBancos] = await Promise.all([
+        const [resCat, resSub, resMedios, resBancos, resTarjetas] = await Promise.all([
           supabase.from('Categorias').select('id, categoria').order('categoria'),
           supabase.from('Subcategorias').select('id, subcategoria, categoria_id'),
           supabase.from('MediosPago').select('id, medio').order('medio'),
-          supabase.from('Bancos').select('id, banco').order('banco')
+          supabase.from('Bancos').select('id, banco').order('banco'),
+          // Traemos la nueva tabla
+          supabase.from('TarjetasCredito').select('id, tarjeta').order('tarjeta') 
         ]);
 
         setCategorias(resCat.data || []);
         setSubcategorias(resSub.data || []);
         setMediosPago(resMedios.data || []);
         setBancos(resBancos.data || []);
+        setTarjetas(resTarjetas.data || []);
       } catch (error) {
         console.error("Error:", error);
       } finally {
@@ -48,6 +58,15 @@ export default function FormularioMovimiento() {
   const subcategoriasFiltradas = subcategorias.filter(
     (sub) => sub.categoria_id === parseInt(categoriaSel)
   );
+
+  // LÓGICA INTELIGENTE DE DETECCIÓN
+  const esCrédito = medioPagoSel 
+    ? mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio.toLowerCase().includes('crédito')
+    : false;
+
+  const esPagoTarjeta = subcategoriaSel 
+    ? subcategoriasFiltradas.find(s => s.id === parseInt(subcategoriaSel))?.subcategoria.toLowerCase().includes('pago tarjeta')
+    : false;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -65,7 +84,11 @@ export default function FormularioMovimiento() {
       categoria: parseInt(categoriaSel),
       subcategoria: subcategoriaSel ? parseInt(subcategoriaSel) : null,
       medio_pago: parseInt(medioPagoSel),
-      banco: bancoSel ? parseInt(bancoSel) : null
+      // Si es crédito para compra, el banco origen es nulo. Si es pago, se guarda el banco origen.
+      banco: (!esCrédito || esPagoTarjeta) && bancoSel ? parseInt(bancoSel) : null,
+      cuotas: esCrédito ? parseInt(cuotas) : 1,
+      // NUEVO: Guardar la tarjeta si aplica
+      tarjeta_id: (esCrédito || esPagoTarjeta) && tarjetaSel ? parseInt(tarjetaSel) : null
     };
 
     const { error } = await supabase.from('Movimientos').insert([nuevoMovimiento]);
@@ -80,7 +103,14 @@ export default function FormularioMovimiento() {
       setSubcategoriaSel('');
       setMedioPagoSel('');
       setBancoSel('');
-      window.location.reload(); // Recarga simple para actualizar el historial
+      setTarjetaSel('');
+      setCuotas(1);
+      
+      if (onGuardadoExitoso) {
+        onGuardadoExitoso();
+      } else {
+        window.location.reload(); 
+      }
     }
   };
 
@@ -96,7 +126,6 @@ export default function FormularioMovimiento() {
     );
   }
 
-  // Clases estandarizadas para mantener el diseño consistente
   const inputClases = "w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 outline-none text-sm";
   const labelClases = "block text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5 ml-1";
 
@@ -105,7 +134,6 @@ export default function FormularioMovimiento() {
       
       <form onSubmit={handleSubmit} className="space-y-6">
         
-        {/* Selector tipo "Switch" */}
         <div className="flex p-1 bg-zinc-100 dark:bg-zinc-900 rounded-2xl">
           <button
             type="button"
@@ -132,14 +160,7 @@ export default function FormularioMovimiento() {
             <label className={labelClases}>Monto</label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-medium">$</span>
-              <input
-                type="number"
-                value={monto}
-                onChange={(e) => setMonto(e.target.value)}
-                placeholder="0"
-                className={`${inputClases} pl-8 font-semibold`}
-                required
-              />
+              <input type="number" value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="0" className={`${inputClases} pl-8 font-semibold`} required />
             </div>
           </div>
           <div>
@@ -154,13 +175,7 @@ export default function FormularioMovimiento() {
 
         <div>
           <label className={labelClases}>Descripción</label>
-          <input
-            type="text"
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Ej: Supermercado Líder..."
-            className={inputClases}
-          />
+          <input type="text" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Ej: Supermercado Líder..." className={inputClases} />
         </div>
 
         <div>
@@ -194,19 +209,41 @@ export default function FormularioMovimiento() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelClases}>Medio de Pago</label>
-              <select value={medioPagoSel} onChange={(e) => { setMedioPagoSel(e.target.value); setBancoSel(''); }} className={inputClases} required>
+              <select value={medioPagoSel} onChange={(e) => { setMedioPagoSel(e.target.value); setBancoSel(''); setTarjetaSel(''); setCuotas(1); }} className={inputClases} required>
                 <option value="" disabled>Seleccionar</option>
                 {mediosPago.map((medio) => <option key={medio.id} value={medio.id}>{medio.medio}</option>)}
               </select>
             </div>
 
-            {medioPagoSel && (
+            {/* SE MUESTRA EL BANCO SI NO ES CRÉDITO, O SI ES UN PAGO A LA TARJETA (Origen de fondos) */}
+            {medioPagoSel && (!esCrédito || esPagoTarjeta) && (
               <div className="animate-fade-in">
-                <label className={labelClases}>Banco</label>
-                <select value={bancoSel} onChange={(e) => setBancoSel(e.target.value)} className={inputClases} required={medioPagoSel !== '' && mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio !== 'Efectivo'}>
+                <label className={labelClases}>{esPagoTarjeta ? "Banco Origen" : "Banco"}</label>
+                <select value={bancoSel} onChange={(e) => setBancoSel(e.target.value)} className={inputClases} required={!esCrédito && mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio !== 'Efectivo'}>
                   <option value="" disabled>Seleccionar</option>
                   {bancos.map((bco) => <option key={bco.id} value={bco.id}>{bco.banco}</option>)}
                 </select>
+              </div>
+            )}
+
+            {/* SE MUESTRA LA TARJETA SI ES CRÉDITO, O SI LA SUBCATEGORÍA ES PAGO DE TARJETA (Destino) */}
+            {(esCrédito || esPagoTarjeta) && (
+              <div className="animate-fade-in">
+                <label className={labelClases}>{esPagoTarjeta ? "Tarjeta a Pagar" : "Tarjeta de Crédito"}</label>
+                <select value={tarjetaSel} onChange={(e) => setTarjetaSel(e.target.value)} className={inputClases} required>
+                  <option value="" disabled>Seleccionar</option>
+                  {tarjetas.map((tc) => <option key={tc.id} value={tc.id}>{tc.tarjeta}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* SELECTOR DE CUOTAS */}
+            {esCredito && !esPagoTarjeta && (
+              <div className="animate-fade-in col-span-1 sm:col-span-2 mt-2 p-4 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">Número de Cuotas</label>
+                <div className="relative">
+                  <input type="number" min="1" max="48" value={cuotas} onChange={(e) => setCuotas(e.target.value)} className={`${inputClases} font-medium`} required />
+                </div>
               </div>
             )}
           </div>
