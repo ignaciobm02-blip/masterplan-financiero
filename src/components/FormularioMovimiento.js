@@ -59,14 +59,16 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
     (sub) => sub.categoria_id === parseInt(categoriaSel)
   );
 
-  // LÓGICA INTELIGENTE DE DETECCIÓN
-  const esCrédito = medioPagoSel 
-    ? mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio.toLowerCase().includes('crédito')
-    : false;
+  // LÓGICA INTELIGENTE DE DETECCIÓN (A prueba de tildes y mayúsculas)
+  const medioNombre = medioPagoSel 
+    ? mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio.toLowerCase() || ''
+    : '';
+  const esCredito = medioNombre.includes('crédito') || medioNombre.includes('credito');
 
-  const esPagoTarjeta = subcategoriaSel 
-    ? subcategoriasFiltradas.find(s => s.id === parseInt(subcategoriaSel))?.subcategoria.toLowerCase().includes('pago tarjeta')
-    : false;
+  const subNombre = subcategoriaSel 
+    ? subcategoriasFiltradas.find(s => s.id === parseInt(subcategoriaSel))?.subcategoria.toLowerCase() || ''
+    : '';
+  const esPagoTarjeta = subNombre.includes('pago tarjeta');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -85,10 +87,10 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
       subcategoria: subcategoriaSel ? parseInt(subcategoriaSel) : null,
       medio_pago: parseInt(medioPagoSel),
       // Si es crédito para compra, el banco origen es nulo. Si es pago, se guarda el banco origen.
-      banco: (!esCrédito || esPagoTarjeta) && bancoSel ? parseInt(bancoSel) : null,
-      cuotas: esCrédito ? parseInt(cuotas) : 1,
+      banco: (!esCredito || esPagoTarjeta) && bancoSel ? parseInt(bancoSel) : null,
+      cuotas: esCredito && !esPagoTarjeta ? parseInt(cuotas) : 1,
       // NUEVO: Guardar la tarjeta si aplica
-      tarjeta_id: (esCrédito || esPagoTarjeta) && tarjetaSel ? parseInt(tarjetaSel) : null
+      tarjeta_id: (esCredito || esPagoTarjeta) && tarjetaSel ? parseInt(tarjetaSel) : null
     };
 
     const { error } = await supabase.from('Movimientos').insert([nuevoMovimiento]);
@@ -216,10 +218,10 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
             </div>
 
             {/* SE MUESTRA EL BANCO SI NO ES CRÉDITO, O SI ES UN PAGO A LA TARJETA (Origen de fondos) */}
-            {medioPagoSel && (!esCrédito || esPagoTarjeta) && (
+            {medioPagoSel && (!esCredito || esPagoTarjeta) && (
               <div className="animate-fade-in">
                 <label className={labelClases}>{esPagoTarjeta ? "Banco Origen" : "Banco"}</label>
-                <select value={bancoSel} onChange={(e) => setBancoSel(e.target.value)} className={inputClases} required={!esCrédito && mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio !== 'Efectivo'}>
+                <select value={bancoSel} onChange={(e) => setBancoSel(e.target.value)} className={inputClases} required={!esCredito && mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio !== 'Efectivo'}>
                   <option value="" disabled>Seleccionar</option>
                   {bancos.map((bco) => <option key={bco.id} value={bco.id}>{bco.banco}</option>)}
                 </select>
@@ -227,7 +229,7 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
             )}
 
             {/* SE MUESTRA LA TARJETA SI ES CRÉDITO, O SI LA SUBCATEGORÍA ES PAGO DE TARJETA (Destino) */}
-            {(esCrédito || esPagoTarjeta) && (
+            {(esCredito || esPagoTarjeta) && (
               <div className="animate-fade-in">
                 <label className={labelClases}>{esPagoTarjeta ? "Tarjeta a Pagar" : "Tarjeta de Crédito"}</label>
                 <select value={tarjetaSel} onChange={(e) => setTarjetaSel(e.target.value)} className={inputClases} required>
