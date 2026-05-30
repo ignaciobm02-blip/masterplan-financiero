@@ -8,17 +8,17 @@ export default function Home() {
   const [movimientos, setMovimientos] = useState([])
   const [movimientoSeleccionado, setMovimientoSeleccionado] = useState(null)
 
-  async function fetchMovimientos() {
-    // MAGIA DE SUPABASE: Traemos el movimiento y al mismo tiempo "traducimos" los IDs a textos
+async function fetchMovimientos() {
+    // Especificamos la tabla y la columna exacta de la relación usando Tabla!columna
     const { data, error } = await supabase
       .from('Movimientos')
       .select(`
         *,
-        Categorias (categoria),
-        Subcategorias (subcategoria),
-        MediosPago (medio),
-        Bancos (banco),
-        TarjetasCredito (tarjeta)
+        Categorias!categoria (categoria),
+        Subcategorias!subcategoria (subcategoria),
+        MediosPago!medio_pago (medio),
+        Bancos!banco (banco),
+        TarjetasCredito!tarjeta_id (tarjeta)
       `)
       .order('fecha', { ascending: false })
       
