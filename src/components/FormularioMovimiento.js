@@ -59,6 +59,20 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
     (sub) => sub.categoria_id === parseInt(categoriaSel)
   );
 
+  // LÓGICA DE FILTRADO DE CATEGORÍAS (Gasto vs Ingreso)
+  const categoriaIngreso = categorias.find(c => 
+    c.categoria.toLowerCase() === 'ingreso' || c.categoria.toLowerCase() === 'ingresos'
+  );
+  const idIngreso = categoriaIngreso ? categoriaIngreso.id : null;
+
+  const categoriasMostradas = categorias.filter(cat => {
+    if (tipoMovimiento === 'Ingreso') {
+      return cat.id === idIngreso; // Solo muestra Ingresos
+    } else {
+      return cat.id !== idIngreso; // Muestra todo excepto Ingresos
+    }
+  });
+
   // LÓGICA INTELIGENTE DE DETECCIÓN (A prueba de tildes y mayúsculas)
   const medioNombre = medioPagoSel 
     ? mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio.toLowerCase() || ''
@@ -83,11 +97,11 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
       responsable: responsable,
       descripcion: descripcion,
       tipo_movimiento: tipoMovimiento,
-      categoria: parseInt(categoriaSel),
-      subcategoria: subcategoriaSel ? parseInt(subcategoriaSel) : null,
-      medio_pago: parseInt(medioPagoSel),
+      categoria_id: parseInt(categoriaSel),
+      subcategoria_id: subcategoriaSel ? parseInt(subcategoriaSel) : null,
+      medio_pago_id: parseInt(medioPagoSel),
       // Si es crédito para compra, el banco origen es nulo. Si es pago, se guarda el banco origen.
-      banco: (!esCredito || esPagoTarjeta) && bancoSel ? parseInt(bancoSel) : null,
+      banco_id: (!esCredito || esPagoTarjeta) && bancoSel ? parseInt(bancoSel) : null,
       cuotas: esCredito && !esPagoTarjeta ? parseInt(cuotas) : 1,
       // NUEVO: Guardar la tarjeta si aplica
       tarjeta_id: (esCredito || esPagoTarjeta) && tarjetaSel ? parseInt(tarjetaSel) : null
@@ -139,7 +153,11 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
         <div className="flex p-1 bg-zinc-100 dark:bg-zinc-900 rounded-2xl">
           <button
             type="button"
-            onClick={() => setTipoMovimiento('Gasto')}
+            onClick={() => { 
+              setTipoMovimiento('Gasto'); 
+              setCategoriaSel(''); 
+              setSubcategoriaSel(''); 
+            }}
             className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all duration-300 ${
               tipoMovimiento === 'Gasto' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
             }`}
@@ -148,7 +166,11 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
           </button>
           <button
             type="button"
-            onClick={() => setTipoMovimiento('Ingreso')}
+            onClick={() => { 
+              setTipoMovimiento('Ingreso'); 
+              setCategoriaSel(''); 
+              setSubcategoriaSel(''); 
+            }}
             className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all duration-300 ${
               tipoMovimiento === 'Ingreso' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
             }`}
@@ -191,7 +213,8 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
               <label className={labelClases}>Categoría</label>
               <select value={categoriaSel} onChange={(e) => { setCategoriaSel(e.target.value); setSubcategoriaSel(''); }} className={inputClases} required>
                 <option value="" disabled>Seleccionar</option>
-                {categorias.map((cat) => <option key={cat.id} value={cat.id}>{cat.categoria}</option>)}
+                {/* AHORA USAMOS EL ARREGLO FILTRADO */}
+                {categoriasMostradas.map((cat) => <option key={cat.id} value={cat.id}>{cat.categoria}</option>)}
               </select>
             </div>
 
