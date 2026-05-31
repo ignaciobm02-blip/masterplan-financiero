@@ -8,8 +8,6 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
   const [subcategorias, setSubcategorias] = useState([]);
   const [mediosPago, setMediosPago] = useState([]);
   const [bancos, setBancos] = useState([]);
-  
-  // NUEVO: Estado para las Tarjetas de Crédito
   const [tarjetas, setTarjetas] = useState([]);
 
   const [monto, setMonto] = useState('');
@@ -17,12 +15,12 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
   const [descripcion, setDescripcion] = useState('');
   const [tipoMovimiento, setTipoMovimiento] = useState('Gasto');
   const [responsable, setResponsable] = useState('');
+  
   const [categoriaSel, setCategoriaSel] = useState('');
   const [subcategoriaSel, setSubcategoriaSel] = useState('');
   const [medioPagoSel, setMedioPagoSel] = useState('');
   const [bancoSel, setBancoSel] = useState('');
   
-  // NUEVO: Estados para Tarjeta seleccionada y Cuotas
   const [tarjetaSel, setTarjetaSel] = useState('');
   const [cuotas, setCuotas] = useState(1);
 
@@ -37,7 +35,6 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
           supabase.from('Subcategorias').select('id, subcategoria, categoria_id'),
           supabase.from('MediosPago').select('id, medio').order('medio'),
           supabase.from('Bancos').select('id, banco').order('banco'),
-          // Traemos la nueva tabla
           supabase.from('TarjetasCredito').select('id, tarjeta').order('tarjeta') 
         ]);
 
@@ -55,25 +52,23 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
     cargarDatosIniciales();
   }, []);
 
-  const subcategoriasFiltradas = subcategorias.filter(
-    (sub) => sub.categoria_id === parseInt(categoriaSel)
-  );
-
-  // LÓGICA DE FILTRADO DE CATEGORÍAS (Gasto vs Ingreso)
+  // LÓGICA NINJA DE FILTRADO (Ingreso Invisible)
   const categoriaIngreso = categorias.find(c => 
     c.categoria.toLowerCase() === 'ingreso' || c.categoria.toLowerCase() === 'ingresos'
   );
   const idIngreso = categoriaIngreso ? categoriaIngreso.id : null;
 
-  const categoriasMostradas = categorias.filter(cat => {
-    if (tipoMovimiento === 'Ingreso') {
-      return cat.id === idIngreso; // Solo muestra Ingresos
-    } else {
-      return cat.id !== idIngreso; // Muestra todo excepto Ingresos
-    }
-  });
+  // Mostramos todas las categorías MENOS la de ingresos para el menú de Gastos
+  const categoriasGasto = categorias.filter(cat => cat.id !== idIngreso);
 
-  // LÓGICA INTELIGENTE DE DETECCIÓN (A prueba de tildes y mayúsculas)
+  // Determinamos qué ID de categoría usar para filtrar las subcategorías
+  const categoriaActivaId = tipoMovimiento === 'Ingreso' ? idIngreso : parseInt(categoriaSel);
+
+  const subcategoriasFiltradas = subcategorias.filter(
+    (sub) => sub.categoria_id === categoriaActivaId
+  );
+
+  // LÓGICA INTELIGENTE DE DETECCIÓN
   const medioNombre = medioPagoSel 
     ? mediosPago.find(m => m.id === parseInt(medioPagoSel))?.medio.toLowerCase() || ''
     : '';
@@ -86,8 +81,18 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!monto || !categoriaSel || !medioPagoSel || !responsable) {
+    
+    // Validación de seguridad ajustada a la lógica Ninja
+    if (!monto || !medioPagoSel || !responsable) {
       alert("Por favor completa los campos obligatorios.");
+      return;
+    }
+    if (tipoMovimiento === 'Gasto' && !categoriaSel) {
+      alert("Por favor selecciona una categoría para este gasto.");
+      return;
+    }
+    if (tipoMovimiento === 'Ingreso' && !subcategoriaSel) {
+      alert("Por favor selecciona qué tipo de ingreso es (Subcategoría).");
       return;
     }
 
@@ -97,13 +102,12 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
       responsable: responsable,
       descripcion: descripcion,
       tipo_movimiento: tipoMovimiento,
-      categoria_id: parseInt(categoriaSel),
+      // Magia: Si es ingreso manda el idIngreso, si es gasto manda lo que seleccionaste
+      categoria_id: tipoMovimiento === 'Ingreso' ? idIngreso : parseInt(categoriaSel),
       subcategoria_id: subcategoriaSel ? parseInt(subcategoriaSel) : null,
       medio_pago_id: parseInt(medioPagoSel),
-      // Si es crédito para compra, el banco origen es nulo. Si es pago, se guarda el banco origen.
       banco_id: (!esCredito || esPagoTarjeta) && bancoSel ? parseInt(bancoSel) : null,
       cuotas: esCredito && !esPagoTarjeta ? parseInt(cuotas) : 1,
-      // NUEVO: Guardar la tarjeta si aplica
       tarjeta_id: (esCredito || esPagoTarjeta) && tarjetaSel ? parseInt(tarjetaSel) : null
     };
 
@@ -209,20 +213,24 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
 
         <div className="pt-4 mt-2 border-t border-zinc-100 dark:border-zinc-800/80">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClases}>Categoría</label>
-              <select value={categoriaSel} onChange={(e) => { setCategoriaSel(e.target.value); setSubcategoriaSel(''); }} className={inputClases} required>
-                <option value="" disabled>Seleccionar</option>
-                {/* AHORA USAMOS EL ARREGLO FILTRADO */}
-                {categoriasMostradas.map((cat) => <option key={cat.id} value={cat.id}>{cat.categoria}</option>)}
-              </select>
-            </div>
+            
+            {/* Si es Gasto, mostramos el selector de Categorías normal */}
+            {tipoMovimiento === 'Gasto' && (
+              <div>
+                <label className={labelClases}>Categoría</label>
+                <select value={categoriaSel} onChange={(e) => { setCategoriaSel(e.target.value); setSubcategoriaSel(''); }} className={inputClases} required>
+                  <option value="" disabled>Seleccionar</option>
+                  {categoriasGasto.map((cat) => <option key={cat.id} value={cat.id}>{cat.categoria}</option>)}
+                </select>
+              </div>
+            )}
 
-            {categoriaSel && (
+            {/* Si es Ingreso, O si es un Gasto y ya seleccionaron categoría, mostramos Subcategoría */}
+            {(tipoMovimiento === 'Ingreso' || categoriaSel) && (
               <div className="animate-fade-in">
-                <label className={labelClases}>Subcategoría</label>
-                <select value={subcategoriaSel} onChange={(e) => setSubcategoriaSel(e.target.value)} className={inputClases}>
-                  <option value="" disabled>Opcional</option>
+                <label className={labelClases}>{tipoMovimiento === 'Ingreso' ? 'Tipo de Ingreso' : 'Subcategoría'}</label>
+                <select value={subcategoriaSel} onChange={(e) => setSubcategoriaSel(e.target.value)} className={inputClases} required={tipoMovimiento === 'Ingreso'}>
+                  <option value="" disabled>Seleccionar...</option>
                   {subcategoriasFiltradas.map((sub) => <option key={sub.id} value={sub.id}>{sub.subcategoria}</option>)}
                 </select>
               </div>
@@ -240,7 +248,7 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
               </select>
             </div>
 
-            {/* SE MUESTRA EL BANCO SI NO ES CRÉDITO, O SI ES UN PAGO A LA TARJETA (Origen de fondos) */}
+            {/* SE MUESTRA EL BANCO SI NO ES CRÉDITO, O SI ES UN PAGO A LA TARJETA */}
             {medioPagoSel && (!esCredito || esPagoTarjeta) && (
               <div className="animate-fade-in">
                 <label className={labelClases}>{esPagoTarjeta ? "Banco Origen" : "Banco"}</label>
@@ -251,7 +259,7 @@ export default function FormularioMovimiento({ onGuardadoExitoso }) {
               </div>
             )}
 
-            {/* SE MUESTRA LA TARJETA SI ES CRÉDITO, O SI LA SUBCATEGORÍA ES PAGO DE TARJETA (Destino) */}
+            {/* SE MUESTRA LA TARJETA SI ES CRÉDITO, O SI LA SUBCATEGORÍA ES PAGO DE TARJETA */}
             {(esCredito || esPagoTarjeta) && (
               <div className="animate-fade-in">
                 <label className={labelClases}>{esPagoTarjeta ? "Tarjeta a Pagar" : "Tarjeta de Crédito"}</label>
